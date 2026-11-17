@@ -17,9 +17,12 @@ public struct PayResult: Sendable {
     public var federalIncomeTax: Double = 0
     public var socialSecurity: Double = 0
     public var medicare: Double = 0
-    public var stateIncomeTax: Double = 0
-    public var localTax: Double = 0
-    public var statePayrollTax: Double = 0
+    public var paIncomeTax: Double = 0
+    public var localEarnedIncomeTax: Double = 0
+    /// The rate used: the higher of the home resident and work non-resident rates.
+    public var localEarnedIncomeTaxRate: Double = 0
+    public var localServicesTax: Double = 0
+    public var paUnemploymentTax: Double = 0
 
     public var totalTaxes: Double = 0
     public var totalDeductions: Double = 0
@@ -28,6 +31,8 @@ public struct PayResult: Sendable {
     /// Wages each tax was figured on, for display.
     public var federalTaxableWages: Double = 0
     public var ficaWages: Double = 0
+    /// PA and local earned income tax wages: gross minus Section 125 only (401k is taxable in PA).
+    public var paTaxableWages: Double = 0
 
     /// The half-time premium on overtime hours that counts toward the federal
     /// "no tax on overtime" deduction. It is claimed when you file, not taken off
@@ -46,8 +51,6 @@ public enum PayCalculator {
         var result = PayResult()
         let rate = hours.hourlyRate
         let m = profile.multipliers
-        let periods = Double(profile.frequency.periodsPerYear)
-
         // 1. Gross pay
         func earning(_ label: String, _ h: Double, _ multiplier: Double) {
             guard h > 0 else { return }
@@ -103,29 +106,29 @@ public enum PayCalculator {
         result.medicare = (ficaWages * TaxTables2026.medicareRate
                            + overThreshold * TaxTables2026.additionalMedicareRate).cents
 
-        // 5. State, local, and state payroll taxes
-        result.stateIncomeTax = stateWithholding(wages: incomeTaxWages, periods: periods, profile: profile)
-        result.localTax = (gross * profile.localTaxPercent / 100).cents
-        result.statePayrollTax = (ficaWages * profile.statePayrollTaxPercent / 100).cents
+        // 5. Pennsylvania and Berks County local taxes
+        let paWages = max(0, gross - preTaxHealth)
+        result.paTaxableWages = paWages
+        result.paIncomeTax = (paWages * Pennsylvania.incomeTaxRate).cents
+        result.paUnemploymentTax = (ficaWages * Pennsylvania.unemploymentEmployeeRate).cents
+        let local = localTaxes(wages: paWages, periodsPerYear: profile.frequency.periodsPerYear, profile: profile)
+        result.localEarnedIncomeTaxRate = local.eitRate
+        result.localEarnedIncomeTax = local.eit
+        result.localServicesTax = local.lst
 
-        let state = StateTaxRules.rule(for: profile.stateCode)
         result.taxes = [
             PayLine(label: "Federal income tax", detail: nil, amount: result.federalIncomeTax),
             PayLine(label: "Social Security", detail: "6.2%", amount: result.socialSecurity),
             PayLine(label: "Medicare", detail: "1.45%", amount: result.medicare),
+            PayLine(label: "PA income tax", detail: "3.07%", amount: result.paIncomeTax),
+            PayLine(label: "Local earned income tax", detail: "\((local.eitRate * 100).trimmed)%",
+                    amount: result.localEarnedIncomeTax),
         ]
-        if state.taxesWages {
-            result.taxes.append(PayLine(label: "State income tax", detail: state.isCustom ? nil : state.code,
-                                        amount: result.stateIncomeTax))
+        if result.localServicesTax > 0 {
+            result.taxes.append(PayLine(label: "Local services tax", detail: "\(local.lstAnnual.currency) a year",
+                                        amount: result.localServicesTax))
         }
-        if profile.localTaxPercent > 0 {
-            result.taxes.append(PayLine(label: "Local income tax", detail: "\(profile.localTaxPercent.trimmed)%",
-                                        amount: result.localTax))
-        }
-        if profile.statePayrollTaxPercent > 0 {
-            result.taxes.append(PayLine(label: "State payroll tax", detail: "\(profile.statePayrollTaxPercent.trimmed)%",
-                                        amount: result.statePayrollTax))
-        }
+        result.taxes.append(PayLine(label: "PA unemployment (UC)", detail: "0.07%", amount: result.paUnemploymentTax))
         result.totalTaxes = result.taxes.reduce(0) { $0 + $1.amount }
 
         result.netPay = (gross - result.totalTaxes - result.totalDeductions).cents
@@ -159,19 +162,24 @@ public enum PayCalculator {
         return ((afterCredits + w4.extraWithholding).cents, row.rate)
     }
 
-    static func stateWithholding(wages: Double, periods: Double, profile: PayProfile) -> Double {
-        let rule = StateTaxRules.rule(for: profile.stateCode)
-        let annual = wages * periods
-        let annualTax: Double
-        switch rule.kind {
-        case .noIncomeTax:
-            return 0
-        case let .flat(rate, exempt):
-            annualTax = max(0, annual - profile.stateAnnualAllowance - exempt) * rate
-        case .custom:
-            annualTax = max(0, annual - profile.stateAnnualAllowance) * profile.stateCustomRatePercent / 100
+    /// Berks County earned income tax and Local Services Tax for one paycheck.
+    public static func localTaxes(wages: Double, periodsPerYear: Int, profile: PayProfile)
+        -> (eitRate: Double, eit: Double, lstAnnual: Double, lst: Double) {
+        let home = BerksCounty.area(psd: profile.homePSD) ?? BerksCounty.area(psd: BerksCounty.defaultPSD)!
+        let workNonresidentRate: Double
+        let lstAnnual: Double
+        if profile.workPSD == BerksCounty.outsideCountyPSD {
+            workNonresidentRate = profile.outsideWorkNonresidentRatePercent / 100
+            lstAnnual = profile.outsideWorkLSTAnnual
+        } else {
+            let work = BerksCounty.area(psd: profile.workPSD) ?? home
+            workNonresidentRate = work.nonresidentRate
+            lstAnnual = work.lstAnnual
         }
-        return (annualTax / periods + profile.stateExtraWithholding).cents
+        // Act 32: withhold the higher of the resident and non-resident rates.
+        let rate = max(home.residentRate, workNonresidentRate)
+        let lst = profile.lstExempt ? 0 : (lstAnnual / Double(periodsPerYear)).cents
+        return (rate, (wages * rate).cents, lstAnnual, lst)
     }
 }
 

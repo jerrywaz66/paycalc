@@ -14,8 +14,10 @@ A personal iOS paycheck calculator for hourly pay. Enter your hours, see your ta
 - Federal income tax withholding: IRS Publication 15-T (2026), Worksheet 1A percentage method, Form W-4 2020 or later (filing status, Step 2 checkbox, Steps 3, 4(a), 4(b), 4(c))
 - Social Security 6.2% up to the $184,500 wage base (uses the optional year-to-date field)
 - Medicare 1.45%, plus 0.9% Additional Medicare over $200,000
-- State income tax: no-tax states and flat-rate states built in; other states use a rate you enter
-- Local income tax % and state payroll tax % (SDI, paid family leave, WA Cares)
+- Pennsylvania income tax 3.07% (401(k) contributions are taxable in PA; Section 125 health premiums are not)
+- Pennsylvania unemployment (UC) employee withholding 0.07%
+- Berks County local earned income tax for all 73 municipality/school district pairs: the higher of your home's resident rate and your work location's non-resident rate (Act 32). A job outside Berks takes a rate you enter.
+- Local Services Tax for where you work, spread evenly over your paychecks, with an exemption toggle
 
 **Deductions**: pre-tax health (Section 125), pre-tax retirement (401k), or after-tax, each as a dollar amount or % of gross.
 
@@ -40,10 +42,11 @@ Run the calculator tests: `cd PayCalcCore && swift test`
 
 ## Updating for a new tax year
 
-All federal figures are in `PayCalcCore/Sources/PayCalcCore/TaxTables2026.swift`; state rules are in `StateTax.swift`. When the IRS publishes the next Publication 15-T, update the tables and the expected values in the tests.
+All federal figures are in `PayCalcCore/Sources/PayCalcCore/TaxTables2026.swift`; Pennsylvania and Berks County rates are in `Pennsylvania.swift`. When the IRS publishes the next Publication 15-T, update the tables and the expected values in the tests.
 
 ## Sources
 
 - IRS Publication 15-T (2026), Federal Income Tax Withholding Methods
 - SSA 2026 Social Security changes fact sheet (wage base $184,500)
-- Tax Foundation, State Individual Income Tax Rates and Brackets, 2026
+- PA Department of Labor & Industry, UC Yearly Tax Highlights (employee rate 0.07%, 2026)
+- PA DCED EIT/PIT/LST Tax Register (Berks County, updated September 17, 2026), and the City of Reading 2026 tax rate sheet

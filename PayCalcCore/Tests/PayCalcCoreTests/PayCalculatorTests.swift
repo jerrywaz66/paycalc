@@ -13,7 +13,6 @@ final class PayCalculatorTests: XCTestCase {
 
         var profile = PayProfile()
         profile.frequency = .weekly
-        profile.stateCode = "TX"
 
         let r = PayCalculator.calculate(hours: hours, profile: profile)
         XCTAssertEqual(r.grossPay, 1_187.50, accuracy: 0.001)
@@ -21,14 +20,13 @@ final class PayCalculatorTests: XCTestCase {
         XCTAssertEqual(r.federalIncomeTax, 100.58, accuracy: 0.001)
         XCTAssertEqual(r.socialSecurity, 73.63, accuracy: 0.001)
         XCTAssertEqual(r.medicare, 17.22, accuracy: 0.001)
-        XCTAssertEqual(r.stateIncomeTax, 0)
-        XCTAssertEqual(r.netPay, 1_187.50 - 100.58 - 73.63 - 17.22, accuracy: 0.001)
+        XCTAssertEqual(r.netPay, r.grossPay - r.totalTaxes, accuracy: 0.001)
         // 5 OT hours × $12.50 premium
         XCTAssertEqual(r.qualifiedOvertimePremium, 62.50, accuracy: 0.001)
         XCTAssertEqual(r.federalMarginalRate, 0.12)
     }
 
-    func testBiweeklyMarriedAllHourTypesDeductionsAndFlatState() {
+    func testBiweeklyMarriedAllHourTypesDeductionsReading() {
         var hours = HoursInput()
         hours.hourlyRate = 40
         hours.regularHours = 80
@@ -42,7 +40,8 @@ final class PayCalculatorTests: XCTestCase {
         var profile = PayProfile()
         profile.frequency = .biweekly
         profile.w4.filingStatus = .marriedJointly
-        profile.stateCode = "IL"
+        profile.homePSD = "061301" // Reading City: 3.6% resident EIT, $52 LST
+        profile.workPSD = "061301"
         profile.deductions = [
             Deduction(name: "Medical", kind: .preTaxHealth, amount: 100),
             Deduction(name: "401(k)", kind: .preTaxRetirement, amount: 5, isPercentOfGross: true),
@@ -56,8 +55,13 @@ final class PayCalculatorTests: XCTestCase {
         XCTAssertEqual(r.federalIncomeTax, 285.43, accuracy: 0.001)
         XCTAssertEqual(r.socialSecurity, 246.76, accuracy: 0.001)
         XCTAssertEqual(r.medicare, 57.71, accuracy: 0.001)
-        XCTAssertEqual(r.stateIncomeTax, 186.91, accuracy: 0.001)
-        XCTAssertEqual(r.netPay, 2_999.19, accuracy: 0.001)
+        // PA and local tax 401(k) contributions, so their wage base is 4,080 − 100.
+        XCTAssertEqual(r.paTaxableWages, 3_980, accuracy: 0.001)
+        XCTAssertEqual(r.paIncomeTax, 122.19, accuracy: 0.001)
+        XCTAssertEqual(r.localEarnedIncomeTax, 143.28, accuracy: 0.001)
+        XCTAssertEqual(r.localServicesTax, 2.00, accuracy: 0.001)
+        XCTAssertEqual(r.paUnemploymentTax, 2.79, accuracy: 0.001)
+        XCTAssertEqual(r.netPay, 2_915.84, accuracy: 0.001)
     }
 
     func testSocialSecurityStopsAtWageBase() {
@@ -65,8 +69,7 @@ final class PayCalculatorTests: XCTestCase {
         hours.hourlyRate = 100
         hours.regularHours = 80 // 8,000 gross
 
-        var profile = PayProfile()
-        profile.stateCode = "TX"
+        let profile = PayProfile()
 
         // Only 4,500 of room left under the 184,500 cap.
         let r = PayCalculator.calculate(hours: hours, profile: profile, ytdFicaWages: 180_000)
@@ -89,10 +92,40 @@ final class PayCalculatorTests: XCTestCase {
         XCTAssertEqual(r.amount, 156.15 - 100 + 25, accuracy: 0.001)
     }
 
-    func testOhioZeroBracket() {
+    func testLocalTaxUsesHigherOfResidentAndWorkRate() {
         var profile = PayProfile()
-        profile.stateCode = "OH"
-        // 1,000 × 26 = 26,000, under the 26,050 zero bracket.
-        XCTAssertEqual(PayCalculator.stateWithholding(wages: 1_000, periods: 26, profile: profile), 0)
+        profile.frequency = .semimonthly
+
+        // Live in Exeter (1% resident), work in Reading (1% non-resident, $52 LST).
+        profile.homePSD = "060601"
+        profile.workPSD = "061301"
+        var t = PayCalculator.localTaxes(wages: 2_000, periodsPerYear: 24, profile: profile)
+        XCTAssertEqual(t.eitRate, 0.01)
+        XCTAssertEqual(t.eit, 20.00, accuracy: 0.001)
+        XCTAssertEqual(t.lst, 2.17, accuracy: 0.001)   // 52 / 24
+
+        // Live in Reading (3.6%), work in Ruscombmanor (0.5% non-resident, no LST).
+        profile.homePSD = "061301"
+        profile.workPSD = "061204"
+        t = PayCalculator.localTaxes(wages: 2_000, periodsPerYear: 24, profile: profile)
+        XCTAssertEqual(t.eitRate, 0.036)
+        XCTAssertEqual(t.eit, 72.00, accuracy: 0.001)
+        XCTAssertEqual(t.lst, 0)
+
+        // Work outside Berks at a 1.5% non-resident rate with a $52 LST, exempt from LST.
+        profile.homePSD = "060601"
+        profile.workPSD = BerksCounty.outsideCountyPSD
+        profile.outsideWorkNonresidentRatePercent = 1.5
+        profile.outsideWorkLSTAnnual = 52
+        profile.lstExempt = true
+        t = PayCalculator.localTaxes(wages: 2_000, periodsPerYear: 24, profile: profile)
+        XCTAssertEqual(t.eitRate, 0.015)
+        XCTAssertEqual(t.eit, 30.00, accuracy: 0.001)
+        XCTAssertEqual(t.lst, 0)
+    }
+
+    func testBerksTableIsComplete() {
+        XCTAssertEqual(BerksCounty.areas.count, 73)
+        XCTAssertEqual(Set(BerksCounty.areas.map(\.psd)).count, 73)
     }
 }

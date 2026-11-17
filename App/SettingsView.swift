@@ -4,9 +4,14 @@ import PayCalcCore
 struct SettingsView: View {
     @EnvironmentObject private var store: PayStore
 
-    var body: some View {
-        let state = StateTaxRules.rule(for: store.profile.stateCode)
+    private var localFooter: String {
+        let p = store.profile
+        let t = PayCalculator.localTaxes(wages: 0, periodsPerYear: p.frequency.periodsPerYear, profile: p)
+        let lst = p.lstExempt ? "no Local Services Tax" : "\(t.lstAnnual.currency)/yr Local Services Tax"
+        return "Withholding \((t.eitRate * 100).trimmed)% earned income tax (the higher of where you live and where you work) and \(lst). The LST exemption applies if you expect to earn under $12,000 at this job and filed an exemption form. PA income tax (3.07%) and PA unemployment (0.07%) are always applied."
+    }
 
+    var body: some View {
         NavigationStack {
             Form {
                 Section("Pay schedule") {
@@ -31,25 +36,22 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("State", selection: $store.profile.stateCode) {
-                        ForEach(StateTaxRules.all) { Text($0.name).tag($0.code) }
+                    Picker("I live in", selection: $store.profile.homePSD) {
+                        ForEach(BerksCounty.areas) { Text($0.displayName).tag($0.psd) }
                     }
-                    if state.isCustom {
-                        NumberRow(title: "State tax rate", value: $store.profile.stateCustomRatePercent, suffix: "%")
+                    Picker("I work in", selection: $store.profile.workPSD) {
+                        ForEach(BerksCounty.areas) { Text($0.displayName).tag($0.psd) }
+                        Text("Outside Berks County").tag(BerksCounty.outsideCountyPSD)
                     }
-                    if state.taxesWages {
-                        NumberRow(title: "State allowance (yearly)", value: $store.profile.stateAnnualAllowance, prefix: "$")
-                        NumberRow(title: "Extra state per check", value: $store.profile.stateExtraWithholding, prefix: "$")
+                    if store.profile.workPSD == BerksCounty.outsideCountyPSD {
+                        NumberRow(title: "Work non-resident EIT", value: $store.profile.outsideWorkNonresidentRatePercent, suffix: "%")
+                        NumberRow(title: "Work LST per year", value: $store.profile.outsideWorkLSTAnnual, prefix: "$")
                     }
-                    NumberRow(title: "Local income tax", value: $store.profile.localTaxPercent, suffix: "%")
-                    NumberRow(title: "State payroll tax", value: $store.profile.statePayrollTaxPercent, suffix: "%")
+                    Toggle("Exempt from Local Services Tax", isOn: $store.profile.lstExempt)
                 } header: {
-                    Text("State & local")
+                    Text("Berks County local tax")
                 } footer: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let note = state.note { Text(note) }
-                        Text("State payroll tax covers things like disability insurance or paid family leave (for example CA SDI). Local tax is a city or county income tax.")
-                    }
+                    Text(localFooter)
                 }
 
                 Section {
@@ -139,8 +141,8 @@ struct DeductionEditor: View {
 
     private var footer: String {
         switch deduction.kind {
-        case .preTaxHealth: return "Lowers federal, Social Security, Medicare and state tax."
-        case .preTaxRetirement: return "Lowers federal and state income tax. Social Security and Medicare still apply."
+        case .preTaxHealth: return "Lowers federal, Social Security, Medicare, PA and local tax."
+        case .preTaxRetirement: return "Lowers federal income tax only. Social Security, Medicare, PA and local tax still apply."
         case .postTax: return "Taken out after all taxes."
         }
     }

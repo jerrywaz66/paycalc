@@ -96,10 +96,10 @@ public struct W4: Codable, Equatable, Sendable {
 
 public enum DeductionKind: String, Codable, CaseIterable, Identifiable, Sendable {
     /// Section 125 cafeteria plan: medical, dental, vision, HSA/FSA through payroll.
-    /// Not subject to federal income tax, Social Security, Medicare or (in most states) state tax.
+    /// Not subject to federal, Social Security, Medicare, PA or local earned income tax.
     case preTaxHealth
-    /// Traditional 401(k)/403(b)/457. Not subject to federal/state income tax,
-    /// but still subject to Social Security and Medicare.
+    /// Traditional 401(k)/403(b)/457. Not subject to federal income tax, but still
+    /// subject to Social Security, Medicare, PA income tax and local earned income tax.
     case preTaxRetirement
     /// Roth 401(k), union dues, etc. Taken after all taxes.
     case postTax
@@ -151,18 +151,17 @@ public struct PayProfile: Codable, Equatable, Sendable {
     public var multipliers = PayMultipliers()
     public var deductions: [Deduction] = []
 
-    /// Two-letter state code, or `StateTaxRules.customCode`.
-    public var stateCode: String = "TX"
-    /// Used only when the state is set to custom: flat percent of state wages.
-    public var stateCustomRatePercent: Double = 0
-    /// Annual amount subtracted before state tax (state allowances/exemptions from your state form).
-    public var stateAnnualAllowance: Double = 0
-    /// Extra state withholding per paycheck.
-    public var stateExtraWithholding: Double = 0
-    /// City/county income tax, percent of gross pay.
-    public var localTaxPercent: Double = 0
-    /// State payroll taxes such as CA SDI or paid family leave, percent of gross pay.
-    public var statePayrollTaxPercent: Double = 0
+    /// Where you live (Berks County PSD code). Sets the resident earned income tax rate.
+    public var homePSD: String = BerksCounty.defaultPSD
+    /// Where you work: a Berks PSD code, or `BerksCounty.outsideCountyPSD`.
+    /// Sets the non-resident earned income tax rate and the Local Services Tax.
+    public var workPSD: String = BerksCounty.defaultPSD
+    /// For a job outside Berks County: that place's non-resident EIT rate, in percent.
+    public var outsideWorkNonresidentRatePercent: Double = 0
+    /// For a job outside Berks County: that place's Local Services Tax per year.
+    public var outsideWorkLSTAnnual: Double = 0
+    /// True if you filed an LST exemption (expected earnings from this job under $12,000).
+    public var lstExempt: Bool = false
 
     public init() {}
 }
