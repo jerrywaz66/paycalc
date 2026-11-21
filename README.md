@@ -7,7 +7,6 @@ A personal iOS paycheck calculator for hourly pay. Enter your hours, see your ta
 **Earnings**
 - Regular hours × hourly rate
 - Overtime, double time and triple time (multipliers default to 1.5×, 2×, 3× and can be changed in Settings)
-- Vacation hours at the base rate
 - Shift differential: differential hours × extra $ per hour
 
 **Taxes (2026)**

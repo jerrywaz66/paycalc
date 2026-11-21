@@ -33,7 +33,6 @@ struct CalculatorView: View {
                     NumberRow(title: "Overtime (\(m.overtime.multiplierLabel))", value: $store.hours.overtimeHours, suffix: "hrs")
                     NumberRow(title: "Double time (\(m.doubleTime.multiplierLabel))", value: $store.hours.doubleTimeHours, suffix: "hrs")
                     NumberRow(title: "Triple time (\(m.tripleTime.multiplierLabel))", value: $store.hours.tripleTimeHours, suffix: "hrs")
-                    NumberRow(title: "Vacation", value: $store.hours.vacationHours, suffix: "hrs")
                 }
 
                 Section {

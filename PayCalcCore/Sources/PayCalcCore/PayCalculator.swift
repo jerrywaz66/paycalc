@@ -63,7 +63,6 @@ public enum PayCalculator {
         earning("Overtime", hours.overtimeHours, m.overtime)
         earning("Double time", hours.doubleTimeHours, m.doubleTime)
         earning("Triple time", hours.tripleTimeHours, m.tripleTime)
-        earning("Vacation", hours.vacationHours, 1)
         if hours.shiftDifferentialHours > 0 && hours.shiftDifferentialRate != 0 {
             result.earnings.append(PayLine(
                 label: "Shift differential",
@@ -178,7 +177,9 @@ public enum PayCalculator {
         }
         // Act 32: withhold the higher of the resident and non-resident rates.
         let rate = max(home.residentRate, workNonresidentRate)
-        let lst = profile.lstExempt ? 0 : (lstAnnual / Double(periodsPerYear)).cents
+        // LST is a flat amount per paycheck, but it can only come out of wages actually earned.
+        let lstPerPeriod = profile.lstExempt ? 0 : (lstAnnual / Double(periodsPerYear)).cents
+        let lst = min(lstPerPeriod, max(0, wages))
         return (rate, (wages * rate).cents, lstAnnual, lst)
     }
 }

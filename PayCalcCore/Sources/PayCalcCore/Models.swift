@@ -49,7 +49,6 @@ public struct HoursInput: Codable, Equatable, Sendable {
     public var overtimeHours: Double = 0
     public var doubleTimeHours: Double = 0
     public var tripleTimeHours: Double = 0
-    public var vacationHours: Double = 0
     /// Hours that earn the shift differential.
     public var shiftDifferentialHours: Double = 0
     /// Extra dollars per hour for differential hours.
@@ -63,7 +62,6 @@ public struct HoursInput: Codable, Equatable, Sendable {
         overtimeHours = 0
         doubleTimeHours = 0
         tripleTimeHours = 0
-        vacationHours = 0
         shiftDifferentialHours = 0
     }
 }

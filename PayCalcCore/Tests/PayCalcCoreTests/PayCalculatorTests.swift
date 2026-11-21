@@ -29,11 +29,10 @@ final class PayCalculatorTests: XCTestCase {
     func testBiweeklyMarriedAllHourTypesDeductionsReading() {
         var hours = HoursInput()
         hours.hourlyRate = 40
-        hours.regularHours = 80
+        hours.regularHours = 88
         hours.overtimeHours = 4
         hours.doubleTimeHours = 2
         hours.tripleTimeHours = 1
-        hours.vacationHours = 8
         hours.shiftDifferentialHours = 20
         hours.shiftDifferentialRate = 2
 
@@ -48,7 +47,7 @@ final class PayCalculatorTests: XCTestCase {
         ]
 
         let r = PayCalculator.calculate(hours: hours, profile: profile)
-        // 3,200 + 240 + 160 + 120 + 320 + 40
+        // 3,520 + 240 + 160 + 120 + 40
         XCTAssertEqual(r.grossPay, 4_080, accuracy: 0.001)
         XCTAssertEqual(r.federalTaxableWages, 3_776, accuracy: 0.001)
         XCTAssertEqual(r.ficaWages, 3_980, accuracy: 0.001)
@@ -127,5 +126,20 @@ final class PayCalculatorTests: XCTestCase {
     func testBerksTableIsComplete() {
         XCTAssertEqual(BerksCounty.areas.count, 73)
         XCTAssertEqual(Set(BerksCounty.areas.map(\.psd)).count, 73)
+    }
+
+    func testNoHoursMeansNoTaxesAndZeroTakeHome() {
+        var hours = HoursInput()
+        hours.hourlyRate = 25
+
+        var profile = PayProfile()
+        profile.homePSD = "061301" // Reading City: $52 LST
+        profile.workPSD = "061301"
+
+        let r = PayCalculator.calculate(hours: hours, profile: profile)
+        XCTAssertEqual(r.grossPay, 0, accuracy: 0.001)
+        XCTAssertEqual(r.localServicesTax, 0, accuracy: 0.001)
+        XCTAssertEqual(r.totalTaxes, 0, accuracy: 0.001)
+        XCTAssertEqual(r.netPay, 0, accuracy: 0.001)
     }
 }
