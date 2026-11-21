@@ -149,17 +149,40 @@ public struct PayProfile: Codable, Equatable, Sendable {
     public var multipliers = PayMultipliers()
     public var deductions: [Deduction] = []
 
-    /// Where you live (Berks County PSD code). Sets the resident earned income tax rate.
-    public var homePSD: String = BerksCounty.defaultPSD
-    /// Where you work: a Berks PSD code, or `BerksCounty.outsideCountyPSD`.
-    /// Sets the non-resident earned income tax rate and the Local Services Tax.
-    public var workPSD: String = BerksCounty.defaultPSD
-    /// For a job outside Berks County: that place's non-resident EIT rate, in percent.
-    public var outsideWorkNonresidentRatePercent: Double = 0
-    /// For a job outside Berks County: that place's Local Services Tax per year.
-    public var outsideWorkLSTAnnual: Double = 0
+    /// Where you live: county and PSD code. Sets the resident earned income tax rate.
+    public var homeCounty: String = PALocalTax.defaultCounty
+    public var homePSD: String = PALocalTax.defaultPSD
+    /// Where you work: county and PSD code. Sets the non-resident earned income tax rate
+    /// and the Local Services Tax.
+    public var workCounty: String = PALocalTax.defaultCounty
+    public var workPSD: String = PALocalTax.defaultPSD
     /// True if you filed an LST exemption (expected earnings from this job under $12,000).
     public var lstExempt: Bool = false
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case frequency, w4, multipliers, deductions, homeCounty, homePSD, workCounty, workPSD, lstExempt
+    }
+
+    /// Reads settings saved by any earlier version: missing fields keep their defaults.
+    /// Versions before statewide support saved no county, and could save a work location of
+    /// "OUTSIDE" (outside Berks County); that now falls back to where you live.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        frequency = try c.decodeIfPresent(PayFrequency.self, forKey: .frequency) ?? frequency
+        w4 = try c.decodeIfPresent(W4.self, forKey: .w4) ?? w4
+        multipliers = try c.decodeIfPresent(PayMultipliers.self, forKey: .multipliers) ?? multipliers
+        deductions = try c.decodeIfPresent([Deduction].self, forKey: .deductions) ?? deductions
+        lstExempt = try c.decodeIfPresent(Bool.self, forKey: .lstExempt) ?? lstExempt
+
+        let home = PALocalTax.area(psd: try c.decodeIfPresent(String.self, forKey: .homePSD) ?? "",
+                                   county: try c.decodeIfPresent(String.self, forKey: .homeCounty))
+            ?? PALocalTax.defaultArea
+        let work = PALocalTax.area(psd: try c.decodeIfPresent(String.self, forKey: .workPSD) ?? "",
+                                   county: try c.decodeIfPresent(String.self, forKey: .workCounty))
+            ?? home
+        (homeCounty, homePSD) = (home.county, home.psd)
+        (workCounty, workPSD) = (work.county, work.psd)
+    }
 }

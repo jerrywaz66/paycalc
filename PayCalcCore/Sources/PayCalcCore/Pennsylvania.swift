@@ -15,123 +15,94 @@ public enum Pennsylvania {
     public static let lstExemptionThreshold: Double = 12_000
 }
 
-/// One municipality / school district pair (a PSD code) in Berks County.
+/// One municipality / school district pair (a PSD code) and its local tax rates.
 public struct LocalTaxArea: Identifiable, Hashable, Sendable {
     public let psd: String
+    public let county: String
     public let municipality: String
     public let schoolDistrict: String
-    /// Earned income tax rate for people who live here (municipal + school).
+    /// Earned income tax rate for people who live here (municipal + school district).
     public let residentRate: Double
     /// Earned income tax rate for people who work here but live elsewhere.
     public let nonresidentRate: Double
     /// Local Services Tax per year, owed where you work.
     public let lstAnnual: Double
 
-    public var id: String { psd }
+    /// A few towns straddle two counties and appear under both with the same PSD code.
+    public var id: String { "\(county)-\(psd)" }
 
-    /// "Wyomissing Borough (Wilson SD)" for the one municipality split between districts.
+    /// "Wyomissing Borough (Wilson SD)" when a town is split between school districts.
     public var displayName: String {
-        let duplicated = BerksCounty.areas.filter { $0.municipality == municipality }.count > 1
-        return duplicated ? "\(municipality) (\(schoolDistrict))" : municipality
+        let split = PALocalTax.areas(in: county).filter { $0.municipality == municipality }.count > 1
+        return split ? "\(municipality) (\(schoolDistrict))" : municipality
     }
 }
 
-/// Berks County earned income tax (EIT) and Local Services Tax (LST), 2026.
+/// Pennsylvania local earned income tax (EIT) and Local Services Tax (LST) for every
+/// municipality except Philadelphia, which has its own wage tax and isn't supported yet.
 ///
-/// Source: PA DCED EIT/PIT/LST Tax Register (register updated September 17, 2026);
-/// Reading figures confirmed against the City of Reading 2026 tax rate sheet.
-/// Collector: Berks Earned Income Tax Bureau.
+/// Source: PA DCED EIT/PIT/LST Tax Register, loaded from `Resources/pa_local_taxes.json`.
+/// Rebuild that file each year with `scripts/update_pa_local_taxes.py`.
 ///
 /// Withholding rule (Act 32): the employer withholds the HIGHER of your home's resident
 /// rate and your work location's non-resident rate. LST is owed where you work.
-public enum BerksCounty {
-    /// Use for a job located outside Berks County; rates are entered in Settings.
-    public static let outsideCountyPSD = "OUTSIDE"
+public enum PALocalTax {
+    public static let defaultCounty = "Berks"
     public static let defaultPSD = "061301" // Reading City
 
-    public static func area(psd: String) -> LocalTaxArea? {
-        areas.first { $0.psd == psd }
+    public static var taxYear: Int { table.taxYear }
+    /// Every area, sorted by county, then municipality, then school district.
+    public static var areas: [LocalTaxArea] { table.areas }
+    /// County names, alphabetical.
+    public static var counties: [String] { table.counties }
+
+    public static func areas(in county: String) -> [LocalTaxArea] {
+        table.byCounty[county] ?? []
     }
 
-    private static func a(_ psd: String, _ municipality: String, _ school: String,
-                          resident: Double = 0.01, nonresident: Double = 0.01, lst: Double) -> LocalTaxArea {
-        LocalTaxArea(psd: psd, municipality: municipality, schoolDistrict: school,
-                     residentRate: resident, nonresidentRate: nonresident, lstAnnual: lst)
+    /// The area for a PSD code. Pass the county to pick the right entry for a town that
+    /// straddles two counties (the tax rates are the same either way).
+    public static func area(psd: String, county: String? = nil) -> LocalTaxArea? {
+        let matches = table.byPSD[psd] ?? []
+        return matches.first { $0.county == county } ?? matches.first
     }
 
-    public static let areas: [LocalTaxArea] = [
-        a("061001", "Albany Township", "Kutztown Area SD", lst: 52),
-        a("061201", "Alsace Township", "Oley Valley SD", lst: 0),
-        a("060501", "Amity Township", "Daniel Boone Area SD", lst: 52),
-        a("060201", "Bally Borough", "Boyertown Area SD", lst: 52),
-        a("060202", "Bechtelsville Borough", "Boyertown Area SD", lst: 52),
-        a("061401", "Bern Township", "Schuylkill Valley SD", lst: 52),
-        a("061501", "Bernville Borough", "Tulpehocken Area SD", lst: 52),
-        a("061502", "Bethel Township", "Tulpehocken Area SD", lst: 52),
-        a("060502", "Birdsboro Borough", "Daniel Boone Area SD", lst: 52),
-        a("060203", "Boyertown Borough", "Boyertown Area SD", lst: 52),
-        a("060801", "Brecknock Township", "Governor Mifflin SD", lst: 10),
-        a("151001", "Caernarvon Township", "Twin Valley SD", lst: 52),
-        a("061402", "Centerport Borough", "Schuylkill Valley SD", lst: 0),
-        a("061403", "Centre Township", "Schuylkill Valley SD", lst: 0),
-        a("060204", "Colebrookdale Township", "Boyertown Area SD", lst: 52),
-        a("060802", "Cumru Township", "Governor Mifflin SD", lst: 52),
-        a("060301", "District Township", "Brandywine Heights Area SD", lst: 10),
-        a("060205", "Douglass Township", "Boyertown Area SD", lst: 52),
-        a("060206", "Earl Township", "Boyertown Area SD", lst: 10),
-        a("060601", "Exeter Township", "Exeter Township SD", lst: 52),
-        a("060701", "Fleetwood Borough", "Fleetwood Area SD", lst: 52),
-        a("061002", "Greenwich Township", "Kutztown Area SD", lst: 10),
-        a("060901", "Hamburg Borough", "Hamburg Area SD", lst: 52),
-        a("060401", "Heidelberg Township", "Conrad Weiser Area SD", lst: 52),
-        a("462101", "Hereford Township", "Upper Perkiomen SD", lst: 52),
-        a("061503", "Jefferson Township", "Tulpehocken Area SD", lst: 0),
-        a("060803", "Kenhorst Borough", "Governor Mifflin SD", lst: 52),
-        a("061003", "Kutztown Borough", "Kutztown Area SD", lst: 52),
-        a("061101", "Laureldale Borough", "Muhlenberg SD", lst: 52),
-        a("061404", "Leesport Borough", "Schuylkill Valley SD", lst: 52),
-        a("061004", "Lenhartsville Borough", "Kutztown Area SD", lst: 10),
-        a("060302", "Longswamp Township", "Brandywine Heights Area SD", lst: 52),
-        a("060101", "Lower Alsace Township", "Antietam SD", lst: 52),
-        a("061601", "Lower Heidelberg Township", "Wilson SD", lst: 52),
-        a("061005", "Lyons Borough", "Kutztown Area SD", lst: 52),
-        a("060702", "Maidencreek Township", "Fleetwood Area SD", lst: 52),
-        a("060402", "Marion Township", "Conrad Weiser Area SD", lst: 0),
-        a("061006", "Maxatawny Township", "Kutztown Area SD", lst: 52),
-        a("060804", "Mohnton Borough", "Governor Mifflin SD", lst: 52),
-        a("060102", "Mount Penn Borough", "Antietam SD", lst: 52),
-        a("061102", "Muhlenberg Township", "Muhlenberg SD", lst: 52),
-        a("151002", "New Morgan Borough", "Twin Valley SD", lst: 52),
-        a("060403", "North Heidelberg Township", "Conrad Weiser Area SD", lst: 0),
-        a("061202", "Oley Township", "Oley Valley SD", lst: 52),
-        a("061405", "Ontelaunee Township", "Schuylkill Valley SD", lst: 52),
-        a("061504", "Penn Township", "Tulpehocken Area SD", lst: 0),
-        a("060902", "Perry Township", "Hamburg Area SD", lst: 26),
-        a("061203", "Pike Township", "Oley Valley SD", lst: 0),
-        a("061301", "Reading City", "Reading SD", resident: 0.036, nonresident: 0.01, lst: 52),
-        a("060703", "Richmond Township", "Fleetwood Area SD", lst: 52),
-        a("151003", "Robeson Township", "Twin Valley SD", lst: 52),
-        a("060404", "Robesonia Borough", "Conrad Weiser Area SD", lst: 52),
-        a("060303", "Rockland Township", "Brandywine Heights Area SD", lst: 10),
-        a("061204", "Ruscombmanor Township", "Oley Valley SD", nonresident: 0.005, lst: 0),
-        a("060805", "Shillington Borough", "Governor Mifflin SD", lst: 52),
-        a("060903", "Shoemakersville Borough", "Hamburg Area SD", lst: 52),
-        a("061602", "Sinking Spring Borough", "Wilson SD", lst: 52),
-        a("060405", "South Heidelberg Township", "Conrad Weiser Area SD", lst: 52),
-        a("061603", "Spring Township", "Wilson SD", lst: 52),
-        a("060602", "St. Lawrence Borough", "Exeter Township SD", lst: 52),
-        a("060905", "Tilden Township", "Hamburg Area SD", lst: 52),
-        a("060304", "Topton Borough", "Brandywine Heights Area SD", lst: 52),
-        a("061505", "Tulpehocken Township", "Tulpehocken Area SD", lst: 52),
-        a("060503", "Union Township", "Daniel Boone Area SD", lst: 52),
-        a("060906", "Upper Bern Township", "Hamburg Area SD", lst: 52),
-        a("060907", "Upper Tulpehocken Township", "Hamburg Area SD", lst: 52),
-        a("060207", "Washington Township", "Boyertown Area SD", lst: 52),
-        a("060406", "Wernersville Borough", "Conrad Weiser Area SD", lst: 0),
-        a("061701", "West Reading Borough", "Wyomissing Area SD", lst: 52),
-        a("060908", "Windsor Township", "Hamburg Area SD", lst: 0),
-        a("060407", "Womelsdorf Borough", "Conrad Weiser Area SD", lst: 52),
-        a("061604", "Wyomissing Borough", "Wilson SD", lst: 52),
-        a("061702", "Wyomissing Borough", "Wyomissing Area SD", lst: 52),
-    ]
+    public static var defaultArea: LocalTaxArea { area(psd: defaultPSD, county: defaultCounty)! }
+
+    // MARK: Loading
+
+    private struct Table {
+        let taxYear: Int
+        let areas: [LocalTaxArea]
+        let counties: [String]
+        let byCounty: [String: [LocalTaxArea]]
+        let byPSD: [String: [LocalTaxArea]]
+    }
+
+    private struct RawFile: Decodable {
+        struct Area: Decodable {
+            let psd, county, municipality, schoolDistrict: String
+            let resident, nonresident, lst: Double
+        }
+        let taxYear: Int
+        let areas: [Area]
+    }
+
+    private static let table: Table = {
+        guard let url = Bundle.module.url(forResource: "pa_local_taxes", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let raw = try? JSONDecoder().decode(RawFile.self, from: data) else {
+            fatalError("pa_local_taxes.json is missing or unreadable")
+        }
+        let areas = raw.areas.map {
+            LocalTaxArea(psd: $0.psd, county: $0.county, municipality: $0.municipality,
+                         schoolDistrict: $0.schoolDistrict,
+                         residentRate: ($0.resident / 100 * 10_000).rounded() / 10_000,
+                         nonresidentRate: ($0.nonresident / 100 * 10_000).rounded() / 10_000,
+                         lstAnnual: $0.lst)
+        }
+        let byCounty = Dictionary(grouping: areas, by: \.county)
+        return Table(taxYear: raw.taxYear, areas: areas, counties: byCounty.keys.sorted(),
+                     byCounty: byCounty, byPSD: Dictionary(grouping: areas, by: \.psd))
+    }()
 }

@@ -36,20 +36,11 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("I live in", selection: $store.profile.homePSD) {
-                        ForEach(BerksCounty.areas) { Text($0.displayName).tag($0.psd) }
-                    }
-                    Picker("I work in", selection: $store.profile.workPSD) {
-                        ForEach(BerksCounty.areas) { Text($0.displayName).tag($0.psd) }
-                        Text("Outside Berks County").tag(BerksCounty.outsideCountyPSD)
-                    }
-                    if store.profile.workPSD == BerksCounty.outsideCountyPSD {
-                        NumberRow(title: "Work non-resident EIT", value: $store.profile.outsideWorkNonresidentRatePercent, suffix: "%")
-                        NumberRow(title: "Work LST per year", value: $store.profile.outsideWorkLSTAnnual, prefix: "$")
-                    }
+                    LocationRow(title: "I live in", county: $store.profile.homeCounty, psd: $store.profile.homePSD)
+                    LocationRow(title: "I work in", county: $store.profile.workCounty, psd: $store.profile.workPSD)
                     Toggle("Exempt from Local Services Tax", isOn: $store.profile.lstExempt)
                 } header: {
-                    Text("Berks County local tax")
+                    Text("Pennsylvania local tax")
                 } footer: {
                     Text(localFooter)
                 }

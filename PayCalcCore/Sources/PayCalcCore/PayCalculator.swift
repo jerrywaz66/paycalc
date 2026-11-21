@@ -105,7 +105,7 @@ public enum PayCalculator {
         result.medicare = (ficaWages * TaxTables2026.medicareRate
                            + overThreshold * TaxTables2026.additionalMedicareRate).cents
 
-        // 5. Pennsylvania and Berks County local taxes
+        // 5. Pennsylvania state and local taxes
         let paWages = max(0, gross - preTaxHealth)
         result.paTaxableWages = paWages
         result.paIncomeTax = (paWages * Pennsylvania.incomeTaxRate).cents
@@ -161,20 +161,13 @@ public enum PayCalculator {
         return ((afterCredits + w4.extraWithholding).cents, row.rate)
     }
 
-    /// Berks County earned income tax and Local Services Tax for one paycheck.
+    /// Pennsylvania local earned income tax and Local Services Tax for one paycheck.
     public static func localTaxes(wages: Double, periodsPerYear: Int, profile: PayProfile)
         -> (eitRate: Double, eit: Double, lstAnnual: Double, lst: Double) {
-        let home = BerksCounty.area(psd: profile.homePSD) ?? BerksCounty.area(psd: BerksCounty.defaultPSD)!
-        let workNonresidentRate: Double
-        let lstAnnual: Double
-        if profile.workPSD == BerksCounty.outsideCountyPSD {
-            workNonresidentRate = profile.outsideWorkNonresidentRatePercent / 100
-            lstAnnual = profile.outsideWorkLSTAnnual
-        } else {
-            let work = BerksCounty.area(psd: profile.workPSD) ?? home
-            workNonresidentRate = work.nonresidentRate
-            lstAnnual = work.lstAnnual
-        }
+        let home = PALocalTax.area(psd: profile.homePSD, county: profile.homeCounty) ?? PALocalTax.defaultArea
+        let work = PALocalTax.area(psd: profile.workPSD, county: profile.workCounty) ?? home
+        let workNonresidentRate = work.nonresidentRate
+        let lstAnnual = work.lstAnnual
         // Act 32: withhold the higher of the resident and non-resident rates.
         let rate = max(home.residentRate, workNonresidentRate)
         // LST is a flat amount per paycheck, but it can only come out of wages actually earned.

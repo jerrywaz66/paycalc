@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "PayCalcCore", targets: ["PayCalcCore"]),
     ],
     targets: [
-        .target(name: "PayCalcCore"),
+        .target(name: "PayCalcCore", resources: [.copy("Resources/pa_local_taxes.json")]),
         .testTarget(name: "PayCalcCoreTests", dependencies: ["PayCalcCore"]),
     ]
 )
